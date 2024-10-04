@@ -3,7 +3,7 @@ import axios, { AxiosRequestConfig } from "axios";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
 import dotenv from "dotenv";
-
+import cors from 'cors';
 dotenv.config();
 
 const app: Express = express();
@@ -60,6 +60,8 @@ const authMiddleware = (
   );
 };
 
+app.use(cors());  // Permette richieste da domini diversi
+
 // Use body-parsing middleware
 app.use(bodyParser.json());
 app.use(loggingMiddleware);
@@ -71,27 +73,31 @@ app.use(authMiddleware);
 const forwardRequest = (req: Request, res: Response) => {
   const url = `http://localhost:11434${req.url}`;
   // const url = `https://google.com${req.url}`;
-  const config: AxiosRequestConfig = {
-    url,
-    method: req.method.toLowerCase(),
-    headers: { ...req.headers, host: undefined }, // Remove 'host' header to avoid conflicts
-    data: req.body,
-  };
+ const config: AxiosRequestConfig = {
+  url,
+  method: req.method.toLowerCase(),
+  headers: { ...req.headers, host: undefined },
+  data: JSON.stringify(req.body),
+  timeout: 10000, // Timeout di 10 secondi
+};
+
 
   console.log(`Forwarding request to ${url}: ${JSON.stringify(req.body)}`);
 
-  axios(config)
-    .then((response) => {
-      res.status(response.status).send(response.data);
-    })
-    .catch((error) => {
-      console.error("Error forwarding request:", error.message);
-      res.status(error.response?.status || 500).json({
-        error: "Internal server error",
-        message: error.message,
-        details: error.response?.data || "No further details",
-      });
+ axios(config)
+  .then((response) => {
+    console.log("Response from Ollama:", response.data);
+    res.status(response.status).send(response.data);
+  })
+  .catch((error) => {
+    console.error("Error forwarding request to Ollama:", error.message);
+    res.status(error.response?.status || 500).json({
+      error: "Internal server error",
+      message: error.message,
+      details: error.response?.data || "No further details",
     });
+  });
+
 };
 
 // Apply the forwardRequest middleware to all routes
